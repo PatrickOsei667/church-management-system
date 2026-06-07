@@ -1,12 +1,11 @@
-const { Donation, DonationItem, Member, Branch } = require('../models');
+const { Donation, DonationItem, Member } = require('../models');
 const { Op } = require('sequelize');
 
-const getAllDonations = async (req, res) => {
+const getAll = async (req, res) => {
   try {
-    const { member_id, branch_id, start_date, end_date, limit = 10, page = 1 } = req.query;
-    const offset = (page - 1) * limit;
-
+    const { member_id, branch_id, start_date, end_date } = req.query;
     const where = {};
+
     if (member_id) where.member_id = member_id;
     if (branch_id) where.branch_id = branch_id;
     if (start_date || end_date) {
@@ -15,185 +14,128 @@ const getAllDonations = async (req, res) => {
       if (end_date) where.donation_date[Op.lte] = new Date(end_date);
     }
 
-    const { count, rows } = await Donation.findAndCountAll({
+    const donations = await Donation.findAll({
       where,
       include: [
-        { model: Member, attributes: ['member_id', 'member_name', 'email'] },
-        { model: Branch, attributes: ['branch_id', 'branch_name'] },
-        { model: DonationItem, attributes: ['donation_item_id', 'donation_type', 'amount'] },
+        { model: Member, as: 'member' },
+        { model: DonationItem, as: 'items' },
       ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
       order: [['donation_date', 'DESC']],
     });
 
-    res.json({
-      success: true,
-      data: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(count / limit),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: donations });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const getDonationById = async (req, res) => {
+const getById = async (req, res) => {
   try {
-    const { donationId } = req.params;
-
-    const donation = await Donation.findByPk(donationId, {
+    const donation = await Donation.findByPk(req.params.donationId, {
       include: [
-        { model: Member, attributes: ['member_id', 'member_name', 'email'] },
-        { model: Branch, attributes: ['branch_id', 'branch_name'] },
-        { model: DonationItem },
+        { model: Member, as: 'member' },
+        { model: DonationItem, as: 'items' },
       ],
     });
 
     if (!donation) {
-      return res.status(404).json({
-        success: false,
-        error: 'Donation not found',
-      });
+      return res.status(404).json({ success: false, error: 'Donation not found' });
     }
 
-    res.json({
-      success: true,
-      data: donation,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: donation });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const createDonation = async (req, res) => {
+const create = async (req, res) => {
   try {
-    const { member_id, branch_id, donation_date, items } = req.body;
+    const { member_id, branch_id, donation_date, items } = req.validated;
 
-    if (!member_id || !branch_id || !donation_date || !items || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields',
-      });
-    }
-
-    const total_amount = items.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+    const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.amount), 0);
 
     const donation = await Donation.create({
       member_id,
       branch_id,
-      donation_date,
-      total_amount,
+      donation_date: new Date(donation_date),
+      total_amount: totalAmount,
     });
 
-    const donationItems = await Promise.all(
-      items.map((item) =>
-        DonationItem.create({
+    if (items && items.length > 0) {
+      await DonationItem.bulkCreate(
+        items.map((item) => ({
           donation_id: donation.donation_id,
           donation_type: item.donation_type,
           amount: item.amount,
-        })
-      )
-    );
+        }))
+      );
+    }
 
     res.status(201).json({
       success: true,
-      data: {
-        ...donation.toJSON(),
-        items: donationItems,
-      },
+      data: { donation_id: donation.donation_id, total_amount: donation.total_amount },
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const updateDonation = async (req, res) => {
+const update = async (req, res) => {
   try {
     const { donationId } = req.params;
-    const { donation_date, items } = req.body;
+    const { donation_date, items } = req.validated;
 
     const donation = await Donation.findByPk(donationId);
     if (!donation) {
-      return res.status(404).json({
-        success: false,
-        error: 'Donation not found',
-      });
+      return res.status(404).json({ success: false, error: 'Donation not found' });
     }
 
+    const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+
+    await donation.update({
+      donation_date: new Date(donation_date),
+      total_amount: totalAmount,
+    });
+
+    // Delete existing items and create new ones
+    await DonationItem.destroy({ where: { donation_id: donationId } });
     if (items && items.length > 0) {
-      await DonationItem.destroy({ where: { donation_id: donationId } });
-      const total_amount = items.reduce((sum, item) => sum + parseFloat(item.amount), 0);
-      await donation.update({ donation_date, total_amount });
-
-      await Promise.all(
-        items.map((item) =>
-          DonationItem.create({
-            donation_id: donationId,
-            donation_type: item.donation_type,
-            amount: item.amount,
-          })
-        )
+      await DonationItem.bulkCreate(
+        items.map((item) => ({
+          donation_id: donationId,
+          donation_type: item.donation_type,
+          amount: item.amount,
+        }))
       );
-    } else {
-      await donation.update({ donation_date });
     }
 
-    res.json({
-      success: true,
-      message: 'Donation updated successfully',
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Donation updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const deleteDonation = async (req, res) => {
+const delete_ = async (req, res) => {
   try {
     const { donationId } = req.params;
 
     const donation = await Donation.findByPk(donationId);
     if (!donation) {
-      return res.status(404).json({
-        success: false,
-        error: 'Donation not found',
-      });
+      return res.status(404).json({ success: false, error: 'Donation not found' });
     }
 
     await donation.destroy();
 
-    res.json({
-      success: true,
-      message: 'Donation deleted successfully',
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Donation deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
 module.exports = {
-  getAllDonations,
-  getDonationById,
-  createDonation,
-  updateDonation,
-  deleteDonation,
+  getAll,
+  getById,
+  create,
+  update,
+  delete: delete_,
 };

@@ -1,11 +1,11 @@
 const { Service, Branch } = require('../models');
 const { Op } = require('sequelize');
 
-const getAllServices = async (req, res) => {
+const getAll = async (req, res) => {
   try {
     const { branch_id, start_date, end_date } = req.query;
-
     const where = {};
+
     if (branch_id) where.branch_id = branch_id;
     if (start_date || end_date) {
       where.service_date = {};
@@ -15,140 +15,90 @@ const getAllServices = async (req, res) => {
 
     const services = await Service.findAll({
       where,
-      include: [{ model: Branch, attributes: ['branch_id', 'branch_name'] }],
+      include: [{ model: Branch, as: 'branch' }],
       order: [['service_date', 'DESC']],
     });
 
-    res.json({
-      success: true,
-      data: services,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: services });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const getServiceById = async (req, res) => {
+const getById = async (req, res) => {
   try {
-    const { serviceId } = req.params;
-
-    const service = await Service.findByPk(serviceId, {
-      include: [{ model: Branch, attributes: ['branch_id', 'branch_name', 'location'] }],
+    const service = await Service.findByPk(req.params.serviceId, {
+      include: [{ model: Branch, as: 'branch' }],
     });
 
     if (!service) {
-      return res.status(404).json({
-        success: false,
-        error: 'Service not found',
-      });
+      return res.status(404).json({ success: false, error: 'Service not found' });
     }
 
-    res.json({
-      success: true,
-      data: service,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: service });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const createService = async (req, res) => {
+const create = async (req, res) => {
   try {
-    const { service_type, service_date, branch_id } = req.body;
-
-    if (!service_type || !service_date || !branch_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Service type, date, and branch ID are required',
-      });
-    }
+    const { service_type, service_date, branch_id } = req.validated;
 
     const service = await Service.create({
       service_type,
-      service_date,
+      service_date: new Date(service_date),
       branch_id,
     });
 
-    res.status(201).json({
-      success: true,
-      data: service,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(201).json({ success: true, data: service });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const updateService = async (req, res) => {
+const update = async (req, res) => {
   try {
     const { serviceId } = req.params;
-    const { service_type, service_date, branch_id } = req.body;
+    const { service_type, service_date } = req.validated;
 
     const service = await Service.findByPk(serviceId);
     if (!service) {
-      return res.status(404).json({
-        success: false,
-        error: 'Service not found',
-      });
+      return res.status(404).json({ success: false, error: 'Service not found' });
     }
 
     await service.update({
       service_type,
-      service_date,
-      branch_id,
+      service_date: new Date(service_date),
     });
 
-    res.json({
-      success: true,
-      message: 'Service updated successfully',
-      data: service,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Service updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const deleteService = async (req, res) => {
+const delete_ = async (req, res) => {
   try {
     const { serviceId } = req.params;
 
     const service = await Service.findByPk(serviceId);
     if (!service) {
-      return res.status(404).json({
-        success: false,
-        error: 'Service not found',
-      });
+      return res.status(404).json({ success: false, error: 'Service not found' });
     }
 
     await service.destroy();
 
-    res.json({
-      success: true,
-      message: 'Service deleted successfully',
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Service deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
 module.exports = {
-  getAllServices,
-  getServiceById,
-  createService,
-  updateService,
-  deleteService,
+  getAll,
+  getById,
+  create,
+  update,
+  delete: delete_,
 };

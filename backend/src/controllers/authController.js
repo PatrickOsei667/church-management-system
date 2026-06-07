@@ -1,28 +1,10 @@
-const { Member } = require('../models');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { body, validationResult } = require('express-validator');
-
-const generateToken = (user) => {
-  return jwt.sign(
-    {
-      member_id: user.member_id,
-      email: user.email,
-      role: user.role,
-      branch_id: user.branch_id,
-    },
-    process.env.JWT_SECRET || 'your_secret_key',
-    { expiresIn: process.env.JWT_EXPIRY || '7d' }
-  );
-};
+const { Member } = require('../models');
 
 const login = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { email, password } = req.body;
+    const { email, password } = req.validated;
 
     const member = await Member.findOne({ where: { email } });
     if (!member) {
@@ -32,15 +14,19 @@ const login = async (req, res) => {
       });
     }
 
-    const isValidPassword = await member.validatePassword(password);
-    if (!isValidPassword) {
+    const isPasswordValid = await bcrypt.compare(password, member.password_hash);
+    if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
       });
     }
 
-    const token = generateToken(member);
+    const token = jwt.sign(
+      { member_id: member.member_id, email: member.email, role: member.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRY }
+    );
 
     res.json({
       success: true,
@@ -53,22 +39,14 @@ const login = async (req, res) => {
         branch_id: member.branch_id,
       },
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
 const register = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { member_name, email, password, phone, address, branch_id } = req.body;
+    const { member_name, email, password, phone, address, branch_id } = req.validated;
 
     const existingMember = await Member.findOne({ where: { email } });
     if (existingMember) {
@@ -78,10 +56,12 @@ const register = async (req, res) => {
       });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const member = await Member.create({
       member_name,
       email,
-      password_hash: password,
+      password_hash: hashedPassword,
       phone,
       address,
       branch_id,
@@ -93,16 +73,9 @@ const register = async (req, res) => {
       message: 'Member registered successfully',
       member_id: member.member_id,
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-module.exports = {
-  login,
-  register,
-  generateToken,
-};
+module.exports = { login, register };

@@ -1,66 +1,40 @@
 const { Pastor, Branch } = require('../models');
 
-const getAllPastors = async (req, res) => {
+const getAll = async (req, res) => {
   try {
     const { branch_id } = req.query;
-
-    const where = {};
-    if (branch_id) where.branch_id = branch_id;
+    const where = branch_id ? { branch_id } : {};
 
     const pastors = await Pastor.findAll({
       where,
-      include: [{ model: Branch, attributes: ['branch_id', 'branch_name'] }],
+      include: [{ model: Branch, as: 'branch' }],
     });
 
-    res.json({
-      success: true,
-      data: pastors,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: pastors });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const getPastorById = async (req, res) => {
+const getById = async (req, res) => {
   try {
-    const { pastorId } = req.params;
-
-    const pastor = await Pastor.findByPk(pastorId, {
-      include: [{ model: Branch, attributes: ['branch_id', 'branch_name', 'location'] }],
+    const pastor = await Pastor.findByPk(req.params.pastorId, {
+      include: [{ model: Branch, as: 'branch' }],
     });
 
     if (!pastor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Pastor not found',
-      });
+      return res.status(404).json({ success: false, error: 'Pastor not found' });
     }
 
-    res.json({
-      success: true,
-      data: pastor,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, data: pastor });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const createPastor = async (req, res) => {
+const create = async (req, res) => {
   try {
-    const { pastor_name, email, phone, branch_id } = req.body;
-
-    if (!pastor_name || !branch_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Pastor name and branch ID are required',
-      });
-    }
+    const { pastor_name, email, phone, branch_id } = req.validated;
 
     const pastor = await Pastor.create({
       pastor_name,
@@ -69,81 +43,51 @@ const createPastor = async (req, res) => {
       branch_id,
     });
 
-    res.status(201).json({
-      success: true,
-      data: pastor,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(201).json({ success: true, data: pastor });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const updatePastor = async (req, res) => {
+const update = async (req, res) => {
   try {
     const { pastorId } = req.params;
-    const { pastor_name, email, phone, branch_id } = req.body;
+    const { pastor_name, email, phone } = req.validated;
 
     const pastor = await Pastor.findByPk(pastorId);
     if (!pastor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Pastor not found',
-      });
+      return res.status(404).json({ success: false, error: 'Pastor not found' });
     }
 
-    await pastor.update({
-      pastor_name,
-      email,
-      phone,
-      branch_id,
-    });
+    await pastor.update({ pastor_name, email, phone });
 
-    res.json({
-      success: true,
-      message: 'Pastor updated successfully',
-      data: pastor,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Pastor updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-const deletePastor = async (req, res) => {
+const delete_ = async (req, res) => {
   try {
     const { pastorId } = req.params;
 
     const pastor = await Pastor.findByPk(pastorId);
     if (!pastor) {
-      return res.status(404).json({
-        success: false,
-        error: 'Pastor not found',
-      });
+      return res.status(404).json({ success: false, error: 'Pastor not found' });
     }
 
     await pastor.destroy();
 
-    res.json({
-      success: true,
-      message: 'Pastor deleted successfully',
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.json({ success: true, message: 'Pastor deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
 module.exports = {
-  getAllPastors,
-  getPastorById,
-  createPastor,
-  updatePastor,
-  deletePastor,
+  getAll,
+  getById,
+  create,
+  update,
+  delete: delete_,
 };

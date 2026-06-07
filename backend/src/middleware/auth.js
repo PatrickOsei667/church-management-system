@@ -1,48 +1,43 @@
 const jwt = require('jsonwebtoken');
 
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
     return res.status(401).json({
       success: false,
-      error: 'Access token required',
+      error: 'Unauthorized - Missing token',
     });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
-    if (err) {
-      return res.status(403).json({
-        success: false,
-        error: 'Invalid or expired token',
-      });
-    }
-    req.user = user;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
     next();
-  });
+  } catch (err) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized - Invalid token',
+    });
+  }
 };
 
-const authorizeRole = (...roles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required',
-      });
-    }
+const authorize = (...roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+    });
+  }
 
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Insufficient permissions',
-      });
-    }
-    next();
-  };
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden - Insufficient permissions',
+    });
+  }
+
+  next();
 };
 
-module.exports = {
-  authenticateToken,
-  authorizeRole,
-};
+module.exports = { authenticate, authorize };

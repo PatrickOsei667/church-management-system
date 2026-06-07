@@ -1,28 +1,21 @@
 const sequelize = require('../config/database');
-const BranchModel = require('./Branch');
-const MemberModel = require('./Member');
-const PastorModel = require('./Pastor');
-const ServiceModel = require('./Service');
-const DonationModel = require('./Donation');
-const DonationItemModel = require('./DonationItem');
-const DepartmentModel = require('./Department');
+const Branch = require('./Branch')(sequelize);
+const Member = require('./Member')(sequelize);
+const Pastor = require('./Pastor')(sequelize);
+const Service = require('./Service')(sequelize);
+const Donation = require('./Donation')(sequelize);
+const DonationItem = require('./DonationItem')(sequelize);
+const Department = require('./Department')(sequelize);
 
-const Branch = BranchModel(sequelize);
-const Member = MemberModel(sequelize);
-const Pastor = PastorModel(sequelize);
-const Service = ServiceModel(sequelize);
-const Donation = DonationModel(sequelize);
-const DonationItem = DonationItemModel(sequelize);
-const Department = DepartmentModel(sequelize);
-
-// Set up associations
-Branch.associate({ Member, Pastor, Service, Donation, Department });
-Member.associate({ Branch, Donation });
-Pastor.associate({ Branch });
-Service.associate({ Branch });
-Donation.associate({ Member, Branch, DonationItem });
-DonationItem.associate({ Donation });
-Department.associate({ Branch });
+// Register associations
+Object.keys({ Branch, Member, Pastor, Service, Donation, DonationItem, Department }).forEach(
+  (modelName) => {
+    const model = { Branch, Member, Pastor, Service, Donation, DonationItem, Department }[modelName];
+    if (model.associate) {
+      model.associate({ Branch, Member, Pastor, Service, Donation, DonationItem, Department });
+    }
+  }
+);
 
 module.exports = {
   sequelize,
