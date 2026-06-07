@@ -9,7 +9,12 @@ const getAll = async (req, res) => {
 
     const { count, rows } = await Member.findAndCountAll({
       where,
-      include: [{ model: Branch, as: 'branch' }],
+      include: [{ 
+        model: Branch, 
+        as: 'branch',
+        attributes: ['branch_id', 'branch_name'] // Select only needed columns
+      }],
+      attributes: ['member_id', 'member_name', 'email', 'phone', 'address', 'branch_id'], // Select only needed columns
       limit: parseInt(limit),
       offset,
     });
@@ -32,7 +37,12 @@ const getAll = async (req, res) => {
 const getById = async (req, res) => {
   try {
     const member = await Member.findByPk(req.params.memberId, {
-      include: [{ model: Branch, as: 'branch' }],
+      include: [{ 
+        model: Branch, 
+        as: 'branch',
+        attributes: ['branch_id', 'branch_name']
+      }],
+      attributes: ['member_id', 'member_name', 'email', 'phone', 'address', 'branch_id'],
     });
 
     if (!member) {
