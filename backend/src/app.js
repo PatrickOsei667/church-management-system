@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const { sequelize } = require('./models');
 const errorHandler = require('./middleware/errorHandler');
+const { cacheMiddleware } = require('./middleware/cache');
 
 const authRoutes = require('./routes/auth');
 const branchRoutes = require('./routes/branches');
@@ -22,6 +23,14 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply caching middleware to read-only routes (5 minute TTL)
+app.use('/api/members', cacheMiddleware(300));
+app.use('/api/donations', cacheMiddleware(300));
+app.use('/api/branches', cacheMiddleware(300));
+app.use('/api/pastors', cacheMiddleware(300));
+app.use('/api/services', cacheMiddleware(300));
+app.use('/api/departments', cacheMiddleware(300));
 
 // Routes
 app.use('/api/auth', authRoutes);
